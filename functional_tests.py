@@ -15,10 +15,10 @@ class NewVisitorTest(unittest.TestCase):
         self.browser.get('http://localhost:8000')
 
         # She notices the page title and header mention to-do lists
-        self.assertIn('To-Do', self.browser.title)  
+        self.assertIn('Coach', self.browser.title)  
         self.fail('Finish the test!')  
 
-        # She is invited to enter a to-do item straight away
+        # She is invited to create a new team straight away
 #        [...rest of comments as before]
 
 if __name__ == '__main__':  
