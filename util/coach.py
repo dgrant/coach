@@ -84,21 +84,34 @@ def calculate_next_positions(player_game_array, all_players: Tuple[str], absents
     all_player_frequencies = get_player_position_frequencies(player_game_array, possible_positions)
     # pprint.pprint(all_player_frequencies)
 
+    frequencies_list = []
+    for player, frequencies in all_player_frequencies.items():
+        last_position_played = player_game_array[player][-1]
+        new_frequencies = decorate_frequencies_with_preferences(player, frequencies, last_position_played)
+        new_frequencies.sort(key=operator.itemgetter(0, 2))
+        frequencies_list.append((player, new_frequencies))
+
+    frequencies_list.sort(key=lambda x: x[1][0])
+
     done = False
     new_assignments = None
     while not done:
         available_positions = list(possible_positions)
-        random.shuffle(players)
+        # random.shuffle(players)
         new_assignments = []
-        for player in players:
+        for frequency_line in frequencies_list:
+            player = frequency_line[0]
+            if player in absents:
+                continue
+            frequencies = frequency_line[1]
             # print('Looking for position for', player)
-            frequencies = all_player_frequencies[player]
+            # frequencies = all_player_frequencies[player]
             last_position_played = player_game_array[player][-1]
-            frequencies = decorate_frequencies_with_preferences(player, frequencies, last_position_played)
-            random.shuffle(frequencies)
+            # frequencies = decorate_frequencies_with_preferences(player, frequencies, last_position_played)
+            # random.shuffle(frequencies)
             # print(f'  Frequencies for {player}: {frequencies}')
             # Sort first by the position that they have played the least, and second, trying to move from outfield to infield or vice versa
-            frequencies.sort(key=operator.itemgetter(0, 2))
+            # frequencies.sort(key=operator.itemgetter(0, 2))
             # print(f'  After sorting {player}: {frequencies}')
             good_possible_positions = [position for _, position, _ in frequencies if position in available_positions]
             if player in exclusions:
@@ -107,14 +120,16 @@ def calculate_next_positions(player_game_array, all_players: Tuple[str], absents
                         good_possible_positions.remove(exclusion)
             # print(f'  Good_possible_positions: {good_possible_positions}')
             assigned_position = good_possible_positions[0]
-            if assigned_position == last_position_played:
-                print('Player playing same position again, restarting!')
-                # restart, re-iterate again
-                break
+            index = 1
+            while assigned_position == last_position_played:
+                print('Player playing same position again, trying again!')
+                assigned_position = good_possible_positions[index]
+                index += 1
             new_assignments.append((player, assigned_position))
             available_positions.remove(assigned_position)
         else:
             done = True
+
     return new_assignments
 
 
@@ -129,6 +144,7 @@ def remove_absents(absents: Tuple[str], players: Tuple[str]) -> Tuple[str]:
 def get_player_position_frequencies(player_game_array, possible_positions) -> Dict[str, List[Tuple[float, str]]]:
     all_player_frequencies = {}
     for player, positions_played in player_game_array.items():
+        positions_played = [position_played for position_played in positions_played if position_played != '']
         frequencies_for_each_position = []
         for position in possible_positions:
             percentage_played_this_position = positions_played.count(position) / len(positions_played)
@@ -164,13 +180,16 @@ def main():
         print('*'*80)
         print(f'Inning {i}')
         print('*' * 80)
-        new_positions = calculate_next_positions(player_game_array, all_players, absents=('Caleb',), exclusions={'Felix': ('C',)})
+        new_positions = calculate_next_positions(player_game_array, all_players, absents=('Jodhyn',), exclusions={'Felix': ('C',)})
         # new_positions = calculate_next_positions(player_game_array, all_players)
         print(new_positions)
 
         player_game_array = add_new_positions_to_game_array(player_game_array, new_positions)
     print('New positions played:')
     print_player_game_array(player_game_array)
+
+    all_player_frequencies = get_player_position_frequencies(player_game_array, get_possible_positions())
+    pprint.pprint(all_player_frequencies)
 
 
 if __name__ == '__main__':
