@@ -2,7 +2,10 @@
 <head><title>Team Manager</title></head>
 <body>
 <h1>Welcome to Team Manager!</h1>
-<input id="id_new_team" placeholder="Enter a team name"/>
+<form method="POST">
+    <input id="id_new_team" name="team_name" placeholder="Enter a team name"/>
+    {% csrf_token %}
+</form>
 <table id="id_list_table">
 </table>
 </body>

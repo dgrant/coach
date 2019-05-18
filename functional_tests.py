@@ -13,7 +13,8 @@ class NewVisitorTest(unittest.TestCase):
         self.browser = webdriver.Firefox()
 
     def tearDown(self):
-        self.browser.quit()
+        pass
+        # self.browser.quit()
 
     def test_can_create_a_team_and_add_players(self):
         # Edith has heard about a cool new online to-do app. She goes
