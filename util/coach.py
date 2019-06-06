@@ -58,8 +58,11 @@ def get_player_game_array(csv_file) -> Dict[str, List[str]]:
                 break
             else:
                 name = row[0]
-                for position_played in row[2:]:
-                    assert position_played in get_possible_positions() or position_played == '', f"{position_played} is not a valid position"
+                for position_played in row[3:]:
+                    assert (
+                        position_played in get_possible_positions()
+                        or position_played == ""
+                    ), f"{position_played} is not a valid position"
                     player_game_array[name].append(position_played)
             line_count += 1
 
@@ -69,9 +72,8 @@ def get_player_game_array(csv_file) -> Dict[str, List[str]]:
 def decorate_frequencies_with_preferences(player_name, frequencies: List[Tuple[float, str]],
                                           last_positions_played: List[str],
                                           outfield_percentages: List[Tuple[str, float]],
-                                          sitting_percentages: List[Tuple[str, float]]) -> List[Tuple[float, str, int]]:
-    guys_who_played_in_outfield_least = [player for (player, _) in outfield_percentages][:3]
-    guys_who_sat_the_least = [player for (player, _) in sitting_percentages][:3]
+                                          players_who_need_to_sit: List[str]) -> List[Tuple[float, str, int]]:
+    guys_who_played_in_outfield_most = [player for (player, _) in outfield_percentages][-int(len(outfield_percentages) / 3):]
     ret = []
     for frequency, position in frequencies:
         score = 0
@@ -86,11 +88,11 @@ def decorate_frequencies_with_preferences(player_name, frequencies: List[Tuple[f
             # Otherwise, not good, we don't want in infield twice in a row or outfield twice in a row
             score += 1
 
-        if player_name in guys_who_played_in_outfield_least and position in outfield:
-            score -= 1
+        if player_name in guys_who_played_in_outfield_most and position in outfield:
+            score += 1
 
-        if player_name in guys_who_sat_the_least and position in sitting:
-            score -= 1
+        if player_name not in players_who_need_to_sit and position in sitting:
+            score += 1
 
         # Bad if they are playing the same position again if they already played it in last few innings
         score += last_positions_played.count(position)
@@ -104,6 +106,7 @@ def _get_sit_percentages(player_game_array):
     for player, positions_played in player_game_array.items():
         positions_played = [position_played for position_played in positions_played if position_played != '']
         sit_percentages.append((player, positions_played.count('Sit') / len(positions_played)))
+    random.shuffle(sit_percentages)
     sit_percentages.sort(key=operator.itemgetter(1))
     return sit_percentages
 
@@ -121,6 +124,11 @@ def _get_outfield_percentages(player_game_array):
     return outfield_percentages
 
 
+def get_players_who_need_to_sit(sitting_percentages):
+    minimum = min([percent for _, percent in sitting_percentages])
+    return [player for player, percent in sitting_percentages if percent == minimum]
+
+
 def calculate_next_positions(player_game_array, all_players: Tuple[str], absents: Optional[Tuple[str, ...]] = None,
                              exclusions: Optional[Dict[str, Tuple[str]]] = None):
     done = False
@@ -128,10 +136,8 @@ def calculate_next_positions(player_game_array, all_players: Tuple[str], absents
     kid_to_put_first = None
     players = tuple(remove_absents(absents, all_players))
     possible_positions = get_possible_positions(len(players))
-    outfield_percentages = _get_outfield_percentages(player_game_array)
-    print("outfield_percentages=" + pprint.pformat(outfield_percentages))
-    sitting_percentages = _get_sit_percentages(player_game_array)
-    print("sit_percentages=" + pprint.pformat(sitting_percentages))
+    outfield_percentages, sitting_percentages = get_sitting_and_outfield_percentages(player_game_array)
+    players_who_need_to_sit = get_players_who_need_to_sit(sitting_percentages)
     all_player_frequencies = get_player_position_frequencies(player_game_array, possible_positions)
 
     frequencies_list = []
@@ -139,26 +145,30 @@ def calculate_next_positions(player_game_array, all_players: Tuple[str], absents
         if player in exclusions:
             frequencies = [(frequency, position) for frequency, position in frequencies if
                            position not in exclusions[player]]
-        # Get the last 4 positions played (ignore empty cells which means the player was absent)
-        last_positions_played = [x for x in player_game_array[player] if x != ''][-4:]
+        # Get the last 3 positions played (ignore empty cells which means the player was absent)
+        last_positions_played = [x for x in player_game_array[player] if x != ''][-3:]
         new_frequencies = decorate_frequencies_with_preferences(player, frequencies, last_positions_played,
-                                                                outfield_percentages, sitting_percentages)
+                                                                outfield_percentages, players_who_need_to_sit)
         # Sort by preference first (so they aren't in the outfield twice in a row), then frequency
         new_frequencies.sort(key=operator.itemgetter(2, 0))
         frequencies_list.append([player, new_frequencies])
-
-    while not done:
+    MAX_TRIES = 100
+    tries = 0
+    while not done and tries < MAX_TRIES:
+        tries += 1
         available_positions = list(possible_positions)
         new_assignments = []
+        print('SHUFFLING')
         random.shuffle(frequencies_list)
         # Sort first by the frequency and then by the player preference
         # frequencies_list.sort(key=lambda x: (x[1][0][0], x[1][0][2]))
-        if kid_to_put_first:
-            index = [x[0] for x in frequencies_list].index(kid_to_put_first)
-            frequencies_list = [frequencies_list[index]] + frequencies_list[:index] + frequencies_list[index + 1:]
+        # if kid_to_put_first:
+        #     index = [x[0] for x in frequencies_list].index(kid_to_put_first)
+        #     frequencies_list = [frequencies_list[index]] + frequencies_list[:index] + frequencies_list[index + 1:]
 
         for frequency_line in frequencies_list:
             player = frequency_line[0]
+            last_positions_played = [x for x in player_game_array[player] if x != ''][-3:]
             if absents and player in absents:
                 new_assignments.append((player, ''))
                 continue
@@ -175,24 +185,27 @@ def calculate_next_positions(player_game_array, all_players: Tuple[str], absents
                 # Probably because this player has an exclusion and his excluded position is the only available position
                 # left in this inning. Try again.
                 print(f'No position available for {player}... trying again')
-                kid_to_put_first = player
+                # kid_to_put_first = player
                 break
             assigned_position = good_possible_positions[0]
-            if assigned_position == 'Sit' and player in [player for player, _ in sitting_percentages][
-                                                        -int(len(sitting_percentages) / 3 * 2):]:
-                # If this player has sat a lot, don't sit again
+            if assigned_position == 'Sit' and player not in players_who_need_to_sit:
+                # Only sit the guy who has sat the least
+                print(f'This player has sat too much: {player}')
                 break
             if assigned_position in outfield:
-                last_two_positions = [x for x in player_game_array[player] if x != ''][-2:]
-                if last_two_positions[0] in outfield and last_two_positions[1] in outfield:
-                    # Don't allow 3 outfield in a row!
+                last_position = [x for x in player_game_array[player] if x != ''][-1]
+                if last_position in outfield:
+                    # Don't allow outfield twice in a row
+                    print(f'This player can\'t play outfield twice in a row: {player}')
                     break
             if assigned_position in outfield and player in [player for player, _ in outfield_percentages][
-                                                           -int(len(outfield_percentages) / 2):]:
+                                                           -int(len(outfield_percentages) / 3):]:
                 # If this player has played outfield a lot, don't again
+                print(f'This player has played outfield lots this year: {player}')
                 break
-            if assigned_position in [x for x in player_game_array[player] if x != ''][-4:]:
+            if assigned_position in last_positions_played and assigned_position in infield:
                 # Don't play the same position again too soon
+                print(f'This player can\'t play same infield position {assigned_position} too soon: {player}')
                 break
             # if assigned_position == last_position_played and len(good_possible_positions) > 1:
             #     Take the next option available
@@ -202,12 +215,22 @@ def calculate_next_positions(player_game_array, all_players: Tuple[str], absents
             # print('Trying again!')
             # kid_to_put_first = player
             # break
+            print(f'Assigning {player} to {assigned_position}')
             new_assignments.append((player, assigned_position))
             available_positions.remove(assigned_position)
         else:
             done = True
-
+    if tries == MAX_TRIES:
+        raise Exception('Failed to make roster')
     return new_assignments
+
+
+def get_sitting_and_outfield_percentages(player_game_array):
+    outfield_percentages = _get_outfield_percentages(player_game_array)
+    sitting_percentages = _get_sit_percentages(player_game_array)
+    print("outfield_percentages=\n" + pprint.pformat(outfield_percentages))
+    print("sit_percentages=\n" + pprint.pformat(sitting_percentages))
+    return outfield_percentages, sitting_percentages
 
 
 def remove_absents(absents: Tuple[str], players: Tuple[str]) -> Tuple[str]:
@@ -260,17 +283,34 @@ def main():
     print('Current positions played:')
     print_player_game_array(player_game_array)
     all_players = tuple(player_game_array.keys())
+    all_player_frequencies = get_player_position_frequencies(player_game_array, get_possible_positions())
+    pprint.pprint(all_player_frequencies)
     num_innings = 1
     for i in range(1, 1 + num_innings):
-        print('*' * 80)
-        print(f'Inning {i}')
-        print('*' * 80)
-        exclusions = {'Felix': ('C',), 'Jodhyn': ('1B',)}
-        new_positions = calculate_next_positions(player_game_array, all_players, exclusions=exclusions)
+        print("*" * 80)
+        print(f"Inning {i}")
+        print("*" * 80)
+        exclusions = {
+            "Felix": ("C", ),
+            "Jodhyn": ("1B", "C"),
+            # "Piper": ("1B",),
+            # "Zayne": ("1B",),
+            # "Casey": ("1B",),
+            # "Aiden": ("1B",),
+            "Isaiah": ("Sit",),
+            "Naden": ("Sit",),
+            "Claire": ("Sit",),
+            "Sam": ("Sit",),
+        }
+        absents = None
+        new_positions = calculate_next_positions(
+            player_game_array, all_players, absents=absents, exclusions=exclusions
+        )
         print("New positions:", new_positions)
 
         player_game_array = add_new_positions_to_game_array(player_game_array, new_positions)
 
+    get_sitting_and_outfield_percentages(player_game_array)
     all_player_frequencies = get_player_position_frequencies(player_game_array, get_possible_positions())
     pprint.pprint(all_player_frequencies)
     print('\nNew positions played:')
@@ -279,7 +319,7 @@ def main():
 
 if __name__ == '__main__':
     seed = random.randrange(sys.maxsize)
-    # seed = 2565506620691857693
+    # seed = 4844073752976889310
     random.seed(seed)
     main()
     print("Seed was:", seed)

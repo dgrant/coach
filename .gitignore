@@ -3,3 +3,7 @@ db.sqlite3
 *.log
 .idea/
 __pycache__/
+/util/build/
+/util/*.html
+*.c
+*.so
