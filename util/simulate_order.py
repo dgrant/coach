@@ -52,7 +52,7 @@ def find_best_permutation(obs_stats_dict: Dict[str, float], num_innings: int, ru
     print('Took: {0}s'.format(time.time() - start))
 
 
-def measure_permutation_averaged(obs_stats_dict, permutation, num_innings: int, run_limits: List[int], num_batters: int, tries=100):
+def measure_permutation_averaged(obs_stats_dict, permutation, num_innings: int, run_limits: List[int], num_batters: int, tries=1000):
     runs = []
     for i in range(tries):
         runs.append(evaluate_order_python([obs_stats_dict[batter] for batter in permutation], num_innings, run_limits, num_batters))
