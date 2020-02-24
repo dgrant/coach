@@ -1,8 +1,12 @@
-from django.http import HttpResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
+
+from team.models import Team
 
 
 def home_page(request):
-    return render(request, 'home.html', {
-        'new_teamname': request.POST.get('team_name', ''),
-    })
+    if request.method == 'POST':
+        Team.objects.create(name=request.POST.get('team_name'))
+        return redirect("/")
+
+    teams = Team.objects.all()
+    return render(request, 'home.html', {"teams": teams})

@@ -1,2 +1,5 @@
 current place:
-http://www.obeythetestinggoat.com/book/chapter_post_and_database.html
+http://www.obeythetestinggoat.com/book/chapter_explicit_waits_1.html
+
+* Clean up after FT runs
+* Support more than one list!

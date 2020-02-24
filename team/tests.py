@@ -10,8 +10,28 @@ class HomePageTest(TestCase):
 
     def test_can_save_POST_request(self):
         response = self.client.post('/', data={'team_name': 'Grey Wolves'})
-        self.assertIn('Grey Wolves', response.content.decode())
-        self.assertTemplateUsed(response, 'home.html')
+
+        self.assertEqual(1, Team.objects.count())
+        new_item = Team.objects.first()
+        self.assertEqual(new_item.name, "Grey Wolves")
+
+    def test_redirects_after_POST(self):
+        response = self.client.post('/', data={'team_name': 'Grey Wolves'})
+        self.assertEqual(302, response.status_code)
+        self.assertEqual("/", response["location"])
+
+    def test_only_saves_items_when_necessary(self):
+        self.client.get('/')
+        self.assertEqual(Team.objects.count(), 0)
+
+    def test_displays_all_teams(self):
+        Team.objects.create(name="team 1")
+        Team.objects.create(name="team 2")
+
+        response = self.client.get("/")
+
+        self.assertIn("team 1", response.content.decode())
+        self.assertIn("team 2", response.content.decode())
 
 
 class TeamModelTest(TestCase):

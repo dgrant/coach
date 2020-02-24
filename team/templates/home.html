@@ -7,7 +7,9 @@
     {% csrf_token %}
 </form>
 <table id="id_list_table">
-    <tr><td>{{ new_teamname }}</td></tr>
+    {% for team in teams %}
+        <tr><td>{{ team.name }}</td></tr>
+    {% endfor %}
 </table>
 </body>
 </html>
