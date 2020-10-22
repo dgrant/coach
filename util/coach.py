@@ -279,7 +279,7 @@ def print_player_game_array(player_game_array, new=0):
 
 
 def main():
-    player_game_array = get_player_game_array('/home/david/Downloads/Grey Wolves Position Tracking - Positions.csv')
+    player_game_array = get_player_game_array('/home/david/Downloads/Positions.csv')
     print('Current positions played:')
     print_player_game_array(player_game_array)
     all_players = tuple(player_game_array.keys())
@@ -291,16 +291,16 @@ def main():
         print(f"Inning {i}")
         print("*" * 80)
         exclusions = {
-            "Felix": ("C", ),
-            "Jodhyn": ("1B", "C"),
-            # "Piper": ("1B",),
-            # "Zayne": ("1B",),
-            # "Casey": ("1B",),
-            # "Aiden": ("1B",),
-            "Isaiah": ("Sit",),
-            "Naden": ("Sit",),
-            "Claire": ("Sit",),
-            "Sam": ("Sit",),
+            "John": ("C", ),
+            "Bob": ("1B", "C"),
+            # "Aaron": ("1B",),
+            # "Dave": ("1B",),
+            # "Mark": ("1B",),
+            # "Fred": ("1B",),
+            "Jason": ("Sit",),
+            "Lisa": ("Sit",),
+            "Susan": ("Sit",),
+            "Naseer": ("Sit",),
         }
         absents = None
         new_positions = calculate_next_positions(
