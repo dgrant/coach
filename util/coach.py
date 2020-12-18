@@ -9,7 +9,7 @@ from collections import defaultdict
 from typing import List, Dict, Optional, Tuple
 
 infield = [
-    'C',
+#    'C',
     'P',
     '1B',
     '2B',
@@ -32,10 +32,10 @@ sitting = [
 
 def get_possible_positions(num_players=12):
     assert num_players <= 12
-    assert num_players >= 9
+    assert num_players >= 5
     possible_positions = outfield + infield + sitting
-    positions_to_remove = ['Sit', 'RCF', 'LCF', ]
-    num_to_remove = len(possible_positions) - num_players
+    positions_to_remove = ['Sit', 'RCF', 'LCF', 'RF', 'LF', 'Rover']
+    num_to_remove = max(len(possible_positions) - num_players, 0)
     positions_to_remove = positions_to_remove[:num_to_remove]
     for position_to_remove in positions_to_remove:
         possible_positions.remove(position_to_remove)
@@ -62,7 +62,7 @@ def get_player_game_array(csv_file) -> Dict[str, List[str]]:
                     assert (
                         position_played in get_possible_positions()
                         or position_played == ""
-                    ), f"{position_played} is not a valid position"
+                    ), f"{position_played} is not a valid position, something wrong with {name}. Possible positions: {get_possible_positions()}"
                     player_game_array[name].append(position_played)
             line_count += 1
 
@@ -78,21 +78,25 @@ def decorate_frequencies_with_preferences(player_name, frequencies: List[Tuple[f
     for frequency, position in frequencies:
         score = 0
 
-        if last_positions_played[-1] in outfield + sitting and position in infield:
-            # If they were in the outfield or sitting last, then new position is infield, this is good
-            score = 0
-        elif last_positions_played[-1] in infield and position in outfield + sitting:
-            # If they were in the outfield or sitting last, then new position is infield, this is good
+        if not last_positions_played:
+            # First game of season case
             score = 0
         else:
-            # Otherwise, not good, we don't want in infield twice in a row or outfield twice in a row
-            score += 1
+            if last_positions_played[-1] in outfield + sitting and position in infield:
+                # If they were in the outfield or sitting last, then new position is infield, this is good
+                score = 0
+            elif last_positions_played[-1] in infield and position in outfield + sitting:
+                # If they were in the outfield or sitting last, then new position is infield, this is good
+                score = 0
+            else:
+                # Otherwise, not good, we don't want in infield twice in a row or outfield twice in a row
+                score += 1
 
-        if player_name in guys_who_played_in_outfield_most and position in outfield:
-            score += 1
+            if player_name in guys_who_played_in_outfield_most and position in outfield:
+                score += 1
 
-        if player_name not in players_who_need_to_sit and position in sitting:
-            score += 1
+            if player_name not in players_who_need_to_sit and position in sitting:
+                score += 1
 
         # Bad if they are playing the same position again if they already played it in last few innings
         score += last_positions_played.count(position)
@@ -105,7 +109,11 @@ def _get_sit_percentages(player_game_array):
     sit_percentages = []
     for player, positions_played in player_game_array.items():
         positions_played = [position_played for position_played in positions_played if position_played != '']
-        sit_percentages.append((player, positions_played.count('Sit') / len(positions_played)))
+        if len(positions_played) == 0:
+            sit_percent = 0
+        else:
+            sit_percent = positions_played.count('Sit') / len(positions_played)
+        sit_percentages.append((player, sit_percent))
     random.shuffle(sit_percentages)
     sit_percentages.sort(key=operator.itemgetter(1))
     return sit_percentages
@@ -118,7 +126,12 @@ def _get_outfield_percentages(player_game_array):
         num_in_outfield = 0
         for position in outfield:
             num_in_outfield += positions_played.count(position)
-        outfield_percentages.append((player, num_in_outfield / len(positions_played)))
+        if len(positions_played) == 0:
+            # Avoid divide by zero at the beginning of the season
+            outfield_percentage = 0
+        else:
+            outfield_percentage = num_in_outfield / len(positions_played)
+        outfield_percentages.append((player, outfield_percentage))
     random.shuffle(outfield_percentages)
     outfield_percentages.sort(key=operator.itemgetter(1))
     return outfield_percentages
@@ -193,8 +206,8 @@ def calculate_next_positions(player_game_array, all_players: Tuple[str], absents
                 print(f'This player has sat too much: {player}')
                 break
             if assigned_position in outfield:
-                last_position = [x for x in player_game_array[player] if x != ''][-1]
-                if last_position in outfield:
+                last_positions = [x for x in player_game_array[player] if x != '']
+                if last_positions and last_positions[-1] in outfield:
                     # Don't allow outfield twice in a row
                     print(f'This player can\'t play outfield twice in a row: {player}')
                     break
@@ -249,7 +262,11 @@ def get_player_position_frequencies(player_game_array, possible_positions) -> Di
         frequencies_for_each_position = []
         for position in possible_positions:
             print(f"{position}: {positions_played.count(position)}, ", end='')
-            percentage_played_this_position = positions_played.count(position) / len(positions_played)
+            if len(positions_played) == 0:
+                # avoid divide by zero for first game of season
+                percentage_played_this_position = 0
+            else:
+                percentage_played_this_position = positions_played.count(position) / len(positions_played)
             frequencies_for_each_position.append((percentage_played_this_position, position))
         all_player_frequencies[player] = frequencies_for_each_position
         print()
@@ -285,7 +302,7 @@ def main():
     all_players = tuple(player_game_array.keys())
     all_player_frequencies = get_player_position_frequencies(player_game_array, get_possible_positions())
     pprint.pprint(all_player_frequencies)
-    num_innings = 1
+    num_innings = 5
     for i in range(1, 1 + num_innings):
         print("*" * 80)
         print(f"Inning {i}")
@@ -302,7 +319,7 @@ def main():
             "Susan": ("Sit",),
             "Naseer": ("Sit",),
         }
-        absents = None
+        absents = ('Jasraj', 'Ivan', 'Leonardo')
         new_positions = calculate_next_positions(
             player_game_array, all_players, absents=absents, exclusions=exclusions
         )
